@@ -15,6 +15,7 @@ type Word struct {
 	Verse    int
 	Position int
 	Letters  string
+	Text     string // original pointed text, before stripping to bare letters
 }
 
 // ParseBook streams a book's XML and returns one Word per word, in order.
@@ -61,6 +62,7 @@ func ParseBook(r io.Reader, book string) ([]Word, error) {
 				Verse:    verse,
 				Position: pos,
 				Letters:  hebrew.StripToLetters(text),
+				Text:     text,
 			})
 		case "k":
 			// Kethiv paired with the following <q>; the qere wins, so discard this.

@@ -34,10 +34,10 @@ func TestParseBook(t *testing.T) {
 	}
 
 	want := []Word{
-		{"TestBook", 1, 1, 1, "ויהי"},
-		{"TestBook", 1, 1, 2, "בימי"},
-		{"TestBook", 1, 2, 1, "שׁפט"},
-		{"TestBook", 1, 2, 2, "הגאיות"}, // qere, not the kethiv
+		{"TestBook", 1, 1, 1, "ויהי", "וַיְהִ֗י"},
+		{"TestBook", 1, 1, 2, "בימי", "בִּימֵי֙"},
+		{"TestBook", 1, 2, 1, "שׁפט", "שְׁפֹ֣ט"},
+		{"TestBook", 1, 2, 2, "הגאיות", "הַגֵּאָי֑וֹת"}, // qere, not the kethiv
 	}
 
 	if len(words) != len(want) {

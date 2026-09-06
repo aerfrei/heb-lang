@@ -26,9 +26,9 @@
   h1 { font-size: 1.4em; margin: 8px 0 4px; }
   .sub { color: var(--gray); font-size: 0.85em; margin-bottom: 12px; text-align: center; }
   #board {
-    display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px;
+    display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
   }
-  .row { display: flex; direction: rtl; gap: 6px; }
+  .row { display: flex; direction: rtl; gap: 10px; align-items: flex-start; }
   .tile {
     width: 52px; height: 52px; border: 2px solid var(--border);
     display: flex; align-items: center; justify-content: center;
@@ -52,23 +52,44 @@
   .key.absent { background: var(--gray); color: white; opacity: 0.85; }
   #msg { min-height: 1.5em; margin: 10px 0; font-weight: bold; }
   .actions { display: flex; gap: 10px; margin-top: 14px; }
-  #newgame, #giveup {
+  #reset, #giveup, #share {
     padding: 8px 20px; font-size: 1em; cursor: pointer;
     border-radius: 6px; border: none; color: white; font-family: sans-serif;
   }
-  #newgame { background: #538d4e; }
+  #reset { background: #538d4e; margin-bottom: 16px; }
   #giveup { background: #8b3a3a; }
+  #share { background: #3a6ea5; }
+
+  /* Citation info: shown beside a guess row, or below the board for the
+     revealed answer. Deliberately small — it's supporting detail, not the
+     main board. */
+  .info-meta { font-family: sans-serif; font-weight: bold; direction: ltr; }
+  .info-verse { font-family: "ShlomoStam", "Times New Roman", serif; direction: rtl; margin-top: 2px; }
+
+  .row-info {
+    flex: 1 1 auto; min-width: 0; max-width: 380px;
+    padding-top: 4px; color: var(--gray);
+  }
+  .row-info .info-meta { font-size: 0.7em; text-align: left; }
+  .row-info .info-verse { font-size: 0.85em; text-align: right; color: var(--fg); line-height: 1.3; }
+
+  #answer-info { min-height: 1.2em; margin: 4px 0; text-align: center; color: var(--gray); }
+  #answer-info .info-meta { font-size: 0.75em; text-align: center; }
+  #answer-info .info-verse { font-size: 1em; text-align: center; color: var(--fg); }
 </style>
 </head>
 <body>
 <h1>&#1514;&#1504;&#1499; Wordle</h1>
 <div class="sub">Guess the 5-letter Biblical Hebrew word (consonants only; shin/sin dot rides with its letter and doesn't count as a separate tile; final letter forms are display-only, not separate letters)</div>
+<div class="sub">Non-attested guesses: <span id="nonattested-count">0</span></div>
+<button id="reset">Reset</button>
 <div id="board"></div>
+<div id="answer-info"></div>
 <div id="msg"></div>
 <div id="keyboard"></div>
 <div class="actions">
   <button id="giveup">Give up</button>
-  <button id="newgame">New word</button>
+  <button id="share" hidden>Share</button>
 </div>
 
 <script>
@@ -111,14 +132,28 @@ const KEY_ROWS = [
 ];
 
 let target, targetTiles, guesses, current, done;
+let guessLog = []; // [{word, result}] per guess, in order, for the share text
+let won = false;
+
+// Loaded once from citations.json: { verses: [[book,chapter,verse,text],...], words: {word: verseIndex} }.
+// Fetched lazily so the ~700KB (gzipped) citation data isn't paid until it's
+// actually needed, and cached by the browser across sessions since it's a
+// static asset at a stable URL rather than embedded in this page.
+let CITATIONS = null;
+let nonAttestedCount = 0; // guesses whose word had no citation entry, across the whole session
+const citationsReady = fetch('citations.json').then(r => r.json()).then(data => { CITATIONS = data; }).catch(() => {});
 
 function newGame() {
   target = TARGETS[Math.floor(Math.random() * TARGETS.length)];
   targetTiles = toTiles(target);
   guesses = [];
+  guessLog = [];
+  won = false;
   current = [];
   done = false;
   document.getElementById('msg').textContent = '';
+  document.getElementById('answer-info').innerHTML = '';
+  document.getElementById('share').hidden = true;
   buildBoard();
   buildKeyboard();
 }
@@ -135,6 +170,10 @@ function buildBoard() {
       tile.id = 'tile-' + r + '-' + c;
       row.appendChild(tile);
     }
+    const info = document.createElement('div');
+    info.className = 'row-info';
+    info.id = 'info-' + r;
+    row.appendChild(info);
     board.appendChild(row);
   }
   renderCurrent();
@@ -177,6 +216,8 @@ function submitGuess() {
   const word = current.join('');
   if (!ACCEPT.has(word)) {
     showMsg('Not in word list');
+    nonAttestedCount++;
+    document.getElementById('nonattested-count').textContent = nonAttestedCount;
     return;
   }
   const result = scoreGuess(current);
@@ -189,16 +230,22 @@ function submitGuess() {
     if (!keyStatus[k] || rank[result[c]] > rank[keyStatus[k]]) keyStatus[k] = result[c];
   }
   guesses.push(current);
+  guessLog.push({ word, result });
   updateKeyboardColors();
+  showCitation(document.getElementById('info-' + r), word);
 
   if (word === target) {
     showMsg('Correct! ' + current.map((t, i) => toDisplay(t, i === 4)).join(''));
+    won = true;
     done = true;
+    document.getElementById('share').hidden = false;
     return;
   }
   if (guesses.length === 6) {
     showMsg('Out of guesses. Word was: ' + targetTiles.map((t, i) => toDisplay(t, i === 4)).join(''));
+    showCitation(document.getElementById('answer-info'), target);
     done = true;
+    document.getElementById('share').hidden = false;
     return;
   }
   current = [];
@@ -207,6 +254,48 @@ function submitGuess() {
 
 function showMsg(text) {
   document.getElementById('msg').textContent = text;
+}
+
+function displayWord(tiles) {
+  return tiles.map((t, i) => toDisplay(t, i === tiles.length - 1)).join('');
+}
+
+function formatBook(book) {
+  const m = book.match(/^(.+)_(\d)$/); // e.g. "Samuel_1" -> "1 Samuel"
+  if (m) return m[2] + ' ' + m[1].replace(/_/g, ' ');
+  return book.replace(/_/g, ' ');
+}
+
+function fillCitationInto(el, word) {
+  el.innerHTML = '';
+  const entry = CITATIONS.words[word];
+  if (entry === undefined) {
+    el.textContent = 'No citation found';
+    return;
+  }
+  const [idx, count] = entry;
+  const [book, chapter, verse, text] = CITATIONS.verses[idx];
+
+  const meta = document.createElement('div');
+  meta.className = 'info-meta';
+  meta.textContent = formatBook(book) + ' ' + chapter + ':' + verse +
+    ' · ' + (count === 1 ? '1×' : count.toLocaleString() + '×');
+
+  const verseDiv = document.createElement('div');
+  verseDiv.className = 'info-verse';
+  verseDiv.textContent = text;
+
+  el.appendChild(meta);
+  el.appendChild(verseDiv);
+}
+
+function showCitation(el, word) {
+  el.textContent = 'Loading citation…';
+  if (CITATIONS) {
+    fillCitationInto(el, word);
+  } else {
+    citationsReady.then(() => fillCitationInto(el, word));
+  }
 }
 
 function pressKey(k) {
@@ -267,12 +356,43 @@ function updateKeyboardColors() {
   });
 }
 
-document.getElementById('newgame').onclick = () => { Object.keys(keyStatus).forEach(k => delete keyStatus[k]); newGame(); };
+document.getElementById('reset').onclick = () => {
+  Object.keys(keyStatus).forEach(k => delete keyStatus[k]);
+  nonAttestedCount = 0;
+  document.getElementById('nonattested-count').textContent = '0';
+  newGame();
+};
 
 document.getElementById('giveup').onclick = () => {
   if (done) return;
   showMsg('Word was: ' + targetTiles.map((t, i) => toDisplay(t, i === 4)).join(''));
+  showCitation(document.getElementById('answer-info'), target);
   done = true;
+  document.getElementById('share').hidden = false;
+};
+
+const RESULT_EMOJI = { correct: '🟩', present: '🟨', absent: '⬛' };
+
+function buildShareText() {
+  const rows = guessLog.map(g => {
+    const entry = CITATIONS && CITATIONS.words[g.word];
+    const count = entry ? entry[1].toLocaleString() : '?';
+    const emojis = g.result.map(r => RESULT_EMOJI[r]).join('');
+    return count.padStart(5, ' ') + '  ' + emojis;
+  });
+  return [
+    'Tanakh Wordle ' + (won ? guessLog.length : 'X') + '/6',
+    '',
+    ...rows,
+    '',
+    '🟥 ' + nonAttestedCount,
+  ].join('\n');
+}
+
+document.getElementById('share').onclick = () => {
+  navigator.clipboard.writeText(buildShareText())
+    .then(() => showMsg('Copied results to clipboard!'))
+    .catch(() => showMsg('Could not copy to clipboard'));
 };
 
 newGame();
