@@ -2,122 +2,138 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>Tor-dle</title>
 <style>
   @font-face {
     font-family: "ShlomoStam";
     src: url("fonts/ShlomoStam.ttf") format("truetype");
+    font-display: swap;
   }
   :root {
     --bg: #ffffff; --fg: #1a1a1a; --border: #d3d6da;
     --gray: #787c7f; --yellow: #c9b458; --green: #6aaa64;
-    --key-bg: #d3d6da;
+    --key-bg: #d3d6da; --muted: #787c7f;
+    --gap: 6px; --gutter: 8px;
+    /* Vertical space taken by everything that isn't the board. */
+    --top: 84px; --kbd: 168px; --verse: 60px;
+    --tile: min(
+      calc((100vw - 2 * var(--gutter) - 4 * var(--gap)) / 5),
+      calc((100dvh - var(--top) - var(--kbd) - var(--verse) - 5 * var(--gap)) / 6),
+      68px);
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #121213; --fg: #ffffff; --border: #3a3a3c; --key-bg: #818384; --gray: #3a3a3c; }
+    :root { --bg: #121213; --fg: #ffffff; --border: #3a3a3c; --key-bg: #818384; --gray: #3a3a3c; --muted: #9a9ca0; }
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
   body {
     background: var(--bg); color: var(--fg); margin: 0;
     font-family: "ShlomoStam", "Times New Roman", serif;
     display: flex; flex-direction: column; align-items: center;
-    min-height: 100vh; padding: 16px;
+    height: 100dvh; overflow: hidden; overscroll-behavior: none;
+    padding: env(safe-area-inset-top) var(--gutter) calc(env(safe-area-inset-bottom) + 6px);
+    touch-action: manipulation; user-select: none; -webkit-user-select: none;
   }
-  h1 { font-size: 1.4em; margin: 8px 0 4px; }
-  .sub { color: var(--gray); font-size: 0.85em; margin-bottom: 12px; text-align: center; }
+  button { touch-action: manipulation; font-family: inherit; }
 
-  .help { color: var(--gray); font-size: 0.85em; text-align: center; margin-bottom: 12px; max-width: 480px; }
-  .help summary { cursor: pointer; list-style: none; }
-  .help summary::-webkit-details-marker { display: none; }
-  .help[open] summary { margin-bottom: 6px; }
+  header {
+    width: 100%; max-width: 500px; display: flex; align-items: center;
+    justify-content: space-between; gap: 8px; padding: 6px 0; direction: ltr;
+  }
+  h1 { font-size: 1.25em; margin: 0; white-space: nowrap; }
+  .hbtn {
+    padding: 6px 10px; font-size: 0.8em; border-radius: 6px; border: none;
+    color: white; font-family: sans-serif; cursor: pointer;
+  }
+  #reset { background: #538d4e; }
+  #giveup { background: #8b3a3a; }
+  #share { background: #3a6ea5; }
+  #help-btn { background: none; color: var(--fg); font-size: 1.1em; padding: 4px 6px; border: none; }
+  .sub { font-family: sans-serif; font-size: 0.72em; color: var(--muted); height: 18px; line-height: 18px; }
+  #msg { height: 26px; line-height: 26px; font-weight: bold; text-align: center; white-space: nowrap; }
 
-  #corner-topleft, #corner-topright { position: fixed; top: 14px; z-index: 10; }
-  #corner-topleft { left: 14px; }
-  #corner-topright {
-    right: 14px; font-size: 0.8em; color: var(--gray);
-    font-family: sans-serif; text-align: right;
-  }
-  @media (max-width: 640px) {
-    #corner-topleft, #corner-topright { position: static; text-align: center; margin: 4px 0; }
-  }
-  #board {
-    display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
-  }
-  .row { display: flex; direction: rtl; gap: 10px; align-items: flex-start; }
+  #board { display: flex; flex-direction: column; gap: var(--gap); margin: auto 0; }
+  .row { display: flex; direction: rtl; gap: var(--gap); }
+  .row.revealed { cursor: pointer; }
   .tile {
-    width: 52px; height: 52px; border: 2px solid var(--border);
+    width: var(--tile); height: var(--tile); border: 2px solid var(--border);
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.8em; font-weight: bold; text-transform: none;
-    background: var(--bg);
+    font-size: calc(var(--tile) * 0.55); font-weight: bold; background: var(--bg);
   }
   .tile.filled { border-color: #878a8c; }
   .tile.correct { background: var(--green); border-color: var(--green); color: white; }
   .tile.present { background: var(--yellow); border-color: var(--yellow); color: white; }
   .tile.absent { background: var(--gray); border-color: var(--gray); color: white; }
-  #keyboard { display: flex; flex-direction: column; gap: 6px; max-width: 560px; }
-  .krow { display: flex; direction: rtl; gap: 4px; justify-content: center; }
-  .key {
-    background: var(--key-bg); border: none; border-radius: 4px;
-    padding: 10px 8px; font-size: 1.1em; font-weight: bold; cursor: pointer;
-    min-width: 34px; font-family: inherit; color: var(--fg);
+
+  #keyboard {
+    width: 100%; max-width: 500px; display: flex; flex-direction: column;
+    gap: 8px; height: var(--kbd); padding-top: 4px;
   }
-  .key.wide { min-width: 56px; font-size: 0.75em; font-family: sans-serif; }
+  .krow { display: flex; direction: rtl; gap: 5px; flex: 1; }
+  .key {
+    flex: 1 1 0; min-width: 0; background: var(--key-bg); border: none; border-radius: 6px;
+    padding: 0; font-size: 1.35em; font-weight: bold; cursor: pointer; color: var(--fg);
+  }
+  .key:active { filter: brightness(0.85); }
+  .key.wide { flex: 1.6 1 0; font-size: 0.8em; font-family: sans-serif; }
   .key.correct { background: var(--green); color: white; }
   .key.present { background: var(--yellow); color: white; }
   .key.absent { background: var(--gray); color: white; opacity: 0.85; }
-  #msg { min-height: 1.5em; margin: 10px 0; font-weight: bold; }
-  .actions { display: flex; gap: 10px; margin-top: 14px; }
-  #reset, #giveup, #share {
-    padding: 8px 20px; font-size: 1em; cursor: pointer;
-    border-radius: 6px; border: none; color: white; font-family: sans-serif;
-  }
-  #reset { background: #538d4e; }
-  #giveup { background: #8b3a3a; }
-  #share { background: #3a6ea5; }
 
-  /* Citation info: shown beside a guess row, or below the board for the
-     revealed answer. Deliberately small — it's supporting detail, not the
-     main board. */
-  .info-meta { font-family: sans-serif; font-weight: bold; direction: ltr; }
-  .info-verse { font-family: "ShlomoStam", "Times New Roman", serif; direction: rtl; margin-top: 2px; }
-
-  .row-info {
-    flex: 1 1 auto; min-width: 0; max-width: 520px;
-    padding-top: 4px; color: var(--gray);
+  /* Verse strip between board and keyboard: fixed height so nothing scrolls or jumps. */
+  #verse {
+    width: 100%; max-width: 500px; height: var(--verse); flex: none;
+    padding: 2px 4px; text-align: center; overflow: hidden;
+    user-select: text; -webkit-user-select: text;
   }
-  .row-info .info-meta { font-size: 0.7em; text-align: left; }
-  .row-info .info-verse {
-    font-size: 0.85em; text-align: right; color: var(--fg); line-height: 1.3;
-    /* Long psukim otherwise stretch this row far past the tiles' height,
-       leaving a big blank gap under the short rows next to it. */
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
-    overflow: hidden;
+  #verse .hint { font-family: sans-serif; font-size: 0.72em; color: var(--muted); line-height: var(--verse); }
+  #verse .info-meta { font-family: sans-serif; font-size: 0.7em; color: var(--muted); direction: ltr; height: 16px; line-height: 16px; }
+  #verse .info-verse {
+    font-size: 0.95em; line-height: 1.3; direction: rtl; text-align: right;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
   }
-
-  #answer-info { min-height: 1.2em; margin: 4px 0; text-align: center; color: var(--gray); }
-  #answer-info .info-meta { font-size: 0.75em; text-align: center; }
-  #answer-info .info-verse { font-size: 1em; text-align: center; color: var(--fg); }
+  #backdrop { position: fixed; inset: 0; z-index: 15; background: rgba(0,0,0,.35); }
+  #full {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    background: var(--bg); border-top: 1px solid var(--border); border-radius: 12px 12px 0 0;
+    padding: 16px 18px calc(env(safe-area-inset-bottom) + 20px);
+    max-height: 70dvh; overflow-y: auto; text-align: center;
+    user-select: text; -webkit-user-select: text; box-shadow: 0 -4px 16px rgba(0,0,0,.25);
+  }
+  #backdrop[hidden], #full[hidden] { display: none; }
+  #full .info-word { font-size: 1.6em; font-weight: bold; }
+  #full .info-meta { font-family: sans-serif; font-size: 0.75em; color: var(--muted); direction: ltr; margin: 2px 0 10px; }
+  #full .info-verse { font-size: 1.2em; line-height: 1.6; direction: rtl; text-align: right; }
+  #verse.has-verse { cursor: pointer; }
+  #verse .more { margin-inline-start: 6px; }
+  #help { position: fixed; inset: 0; z-index: 30; background: var(--bg); padding: 24px; font-family: sans-serif; font-size: 0.95em; line-height: 1.5; direction: ltr; overflow: auto; }
+  #help[hidden] { display: none; }
 </style>
 </head>
 <body>
-<div id="corner-topleft">
-  <button id="reset">Reset</button>
-</div>
-<div id="corner-topright">
-  Non-attested guesses: <span id="nonattested-count">0</span>
-</div>
-<h1>🐢 Tor-dle 📜</h1>
-<details class="help">
-  <summary>ℹ️ How to play</summary>
-  Guess the 5-letter Biblical Hebrew word (consonants only; shin/sin dot rides with its letter and doesn't count as a separate tile; final letter forms are display-only, not separate letters)
-</details>
+<header>
+  <button class="hbtn" id="reset">Reset</button>
+  <h1>🐢 Tor-dle 📜</h1>
+  <span>
+    <button class="hbtn" id="help-btn" aria-label="How to play">ℹ️</button>
+    <button class="hbtn" id="giveup">Give up</button>
+    <button class="hbtn" id="share" hidden>Share</button>
+  </span>
+</header>
+<div class="sub">Non-attested guesses: <span id="nonattested-count">0</span></div>
 <div id="board"></div>
-<div id="answer-info"></div>
 <div id="msg"></div>
+<div id="verse"></div>
+<div id="backdrop" hidden></div>
+<div id="full" hidden></div>
 <div id="keyboard"></div>
-<div class="actions">
-  <button id="giveup">Give up</button>
-  <button id="share" hidden>Share</button>
+<div id="help" hidden>
+  <p><b>How to play</b></p>
+  <p>Guess the 5-letter Biblical Hebrew word (consonants only). The shin/sin dot rides with its letter, and final letter forms are display-only, not separate letters.</p>
+  <p>Tap a guessed row to see a verse where that word appears.</p>
+  <p>Tap anywhere to close.</p>
 </div>
 
 <script>
@@ -139,18 +155,19 @@ function toDisplay(tile, isLast) {
 // A "tile" is one base consonant plus an optional following shin/sin dot.
 function toTiles(word) {
   const tiles = [];
-  const chars = Array.from(word);
-  for (let i = 0; i < chars.length; i++) {
-    const c = chars[i];
+  for (const c of Array.from(word)) {
     const code = c.codePointAt(0);
     if (code === 0x05C1 || code === 0x05C2) {
-      // dot belongs to the previous tile
-      if (tiles.length) tiles[tiles.length - 1] += c;
+      if (tiles.length) tiles[tiles.length - 1] += c; // dot belongs to the previous tile
       continue;
     }
     tiles.push(c);
   }
   return tiles;
+}
+
+function displayWord(tiles) {
+  return tiles.map((t, i) => toDisplay(t, i === tiles.length - 1)).join('');
 }
 
 const KEY_ROWS = [
@@ -159,85 +176,97 @@ const KEY_ROWS = [
   ['פ','צ','ק','ר','שׁ','שׂ','ת']
 ];
 
+const $ = id => document.getElementById(id);
 let target, targetTiles, guesses, current, done;
 let guessLog = []; // [{word, result}] per guess, in order, for the share text
 let won = false;
+const keyStatus = {};
+const keyButtons = {}; // key letter -> button, so recolouring doesn't query the DOM
+const tiles = [];      // tiles[r][c] -> element
+const rowEls = [];
+const RANK = { absent: 0, present: 1, correct: 2 };
 
-// Loaded once from citations.json: { verses: [[book,chapter,verse,text],...], words: {word: verseIndex} }.
-// Fetched lazily so the ~700KB (gzipped) citation data isn't paid until it's
-// actually needed, and cached by the browser across sessions since it's a
-// static asset at a stable URL rather than embedded in this page.
-let CITATIONS = null;
-let nonAttestedCount = 0; // guesses whose word had no citation entry, across the whole session
-const citationsReady = fetch('citations.json').then(r => r.json()).then(data => { CITATIONS = data; }).catch(() => {});
+// citations.json is ~2.8MB, so it's fetched lazily on first key press rather
+// than competing with the initial page load; the game itself only needs ACCEPT.
+let CITATIONS = null, citationsPromise = null;
+let nonAttestedCount = 0;
+function loadCitations() {
+  if (!citationsPromise) {
+    citationsPromise = fetch('citations.json').then(r => r.json())
+      .then(d => { CITATIONS = d; return d; })
+      .catch(() => { citationsPromise = null; return null; });
+  }
+  return citationsPromise;
+}
 
 function newGame() {
   target = TARGETS[Math.floor(Math.random() * TARGETS.length)];
   targetTiles = toTiles(target);
-  guesses = [];
-  guessLog = [];
-  won = false;
-  current = [];
-  done = false;
-  document.getElementById('msg').textContent = '';
-  document.getElementById('answer-info').innerHTML = '';
-  document.getElementById('share').hidden = true;
+  guesses = []; guessLog = []; won = false; current = []; done = false;
+  Object.keys(keyStatus).forEach(k => delete keyStatus[k]);
+  $('msg').textContent = '';
+  $('share').hidden = true;
+  $('giveup').hidden = false;
+  closeFull();
+  clearVerse();
   buildBoard();
   buildKeyboard();
 }
 
 function buildBoard() {
-  const board = document.getElementById('board');
-  board.innerHTML = '';
+  const board = $('board');
+  board.textContent = '';
+  tiles.length = 0; rowEls.length = 0;
   for (let r = 0; r < 6; r++) {
     const row = document.createElement('div');
     row.className = 'row';
+    row.onclick = () => { if (guessLog[r]) showVerse(guessLog[r].word); };
+    tiles[r] = [];
     for (let c = 0; c < 5; c++) {
       const tile = document.createElement('div');
       tile.className = 'tile';
-      tile.id = 'tile-' + r + '-' + c;
       row.appendChild(tile);
+      tiles[r].push(tile);
     }
-    const info = document.createElement('div');
-    info.className = 'row-info';
-    info.id = 'info-' + r;
-    row.appendChild(info);
+    rowEls.push(row);
     board.appendChild(row);
   }
-  renderCurrent();
 }
 
 function renderCurrent() {
   const r = guesses.length;
   for (let c = 0; c < 5; c++) {
-    const tile = document.getElementById('tile-' + r + '-' + c);
-    if (!tile) continue;
+    const tile = tiles[r][c];
     tile.textContent = current[c] ? toDisplay(current[c], c === 4) : '';
     tile.classList.toggle('filled', !!current[c]);
   }
 }
 
-function scoreGuess(tiles) {
+function scoreGuess(t) {
   const result = new Array(5).fill('absent');
   const remaining = {};
   for (let i = 0; i < 5; i++) {
-    if (tiles[i] === targetTiles[i]) {
-      result[i] = 'correct';
-    } else {
-      remaining[targetTiles[i]] = (remaining[targetTiles[i]] || 0) + 1;
-    }
+    if (t[i] === targetTiles[i]) result[i] = 'correct';
+    else remaining[targetTiles[i]] = (remaining[targetTiles[i]] || 0) + 1;
   }
   for (let i = 0; i < 5; i++) {
     if (result[i] === 'correct') continue;
-    if (remaining[tiles[i]] > 0) {
-      result[i] = 'present';
-      remaining[tiles[i]]--;
-    }
+    if (remaining[t[i]] > 0) { result[i] = 'present'; remaining[t[i]]--; }
   }
   return result;
 }
 
-const keyStatus = {};
+function showMsg(text) { $('msg').textContent = text; }
+
+function showAnswerMsg(prefix) { showMsg(prefix + displayWord(targetTiles)); }
+
+function endGame() {
+  done = true;
+  verseWord = null; // force-open the answer's verse even if another was showing
+  showVerse(target);
+  $('share').hidden = false;
+  $('giveup').hidden = true;
+}
 
 function submitGuess() {
   if (done || current.length !== 5) return;
@@ -245,47 +274,38 @@ function submitGuess() {
   if (!ACCEPT.has(word)) {
     showMsg('Not in word list');
     nonAttestedCount++;
-    document.getElementById('nonattested-count').textContent = nonAttestedCount;
+    $('nonattested-count').textContent = nonAttestedCount;
     return;
   }
   const result = scoreGuess(current);
   const r = guesses.length;
   for (let c = 0; c < 5; c++) {
-    const tile = document.getElementById('tile-' + r + '-' + c);
-    tile.classList.add(result[c]);
+    tiles[r][c].classList.add(result[c]);
     const k = current[c];
-    const rank = { absent: 0, present: 1, correct: 2 };
-    if (!keyStatus[k] || rank[result[c]] > rank[keyStatus[k]]) keyStatus[k] = result[c];
+    if (!keyStatus[k] || RANK[result[c]] > RANK[keyStatus[k]]) {
+      keyStatus[k] = result[c];
+      const btn = keyButtons[k];
+      if (btn) { btn.classList.remove('correct', 'present', 'absent'); btn.classList.add(result[c]); }
+    }
   }
   guesses.push(current);
   guessLog.push({ word, result });
-  updateKeyboardColors();
-  showCitation(document.getElementById('info-' + r), word);
+  rowEls[r].classList.add('revealed');
+  showMsg('');
 
   if (word === target) {
-    showMsg('Correct! ' + current.map((t, i) => toDisplay(t, i === 4)).join(''));
+    showMsg('Correct! ' + displayWord(current));
     won = true;
-    done = true;
-    document.getElementById('share').hidden = false;
+    endGame();
     return;
   }
   if (guesses.length === 6) {
-    showMsg('Out of guesses. Word was: ' + targetTiles.map((t, i) => toDisplay(t, i === 4)).join(''));
-    showCitation(document.getElementById('answer-info'), target);
-    done = true;
-    document.getElementById('share').hidden = false;
+    showAnswerMsg('Word was: ');
+    endGame();
     return;
   }
   current = [];
   renderCurrent();
-}
-
-function showMsg(text) {
-  document.getElementById('msg').textContent = text;
-}
-
-function displayWord(tiles) {
-  return tiles.map((t, i) => toDisplay(t, i === tiles.length - 1)).join('');
 }
 
 function formatBook(book) {
@@ -294,44 +314,83 @@ function formatBook(book) {
   return book.replace(/_/g, ' ');
 }
 
-function fillCitationInto(el, word) {
-  el.innerHTML = '';
-  const entry = CITATIONS.words[word];
-  if (entry === undefined) {
-    el.textContent = 'No citation found';
-    return;
-  }
-  const [idx, count] = entry;
-  const [book, chapter, verse, text] = CITATIONS.verses[idx];
+// The verse strip shows one word's citation; tapping the same row again clears it.
+let verseWord = null;
+let verseInfo = null; // {word, meta, text} for the verse currently in the strip
+function clearVerse() {
+  verseWord = null;
+  verseInfo = null;
+  $('verse').classList.remove('has-verse');
+  const v = $('verse');
+  v.textContent = '';
+  const hint = document.createElement('div');
+  hint.className = 'hint';
+  hint.textContent = 'Tap a guessed row to see its verse';
+  v.appendChild(hint);
+}
 
+function showVerse(word) {
+  if (verseWord === word) return clearVerse();
+  verseWord = word;
+  const v = $('verse');
+  v.textContent = '';
   const meta = document.createElement('div');
   meta.className = 'info-meta';
-  meta.textContent = formatBook(book) + ' ' + chapter + ':' + verse +
-    ' · ' + (count === 1 ? '1×' : count.toLocaleString() + '×');
+  meta.textContent = 'Loading citation…';
+  v.appendChild(meta);
 
-  const verseDiv = document.createElement('div');
-  verseDiv.className = 'info-verse';
-  verseDiv.textContent = text;
-
-  el.appendChild(meta);
-  el.appendChild(verseDiv);
+  loadCitations().then(data => {
+    if (verseWord !== word) return; // a different row was tapped meanwhile
+    const entry = data && data.words[word];
+    if (!data) { meta.textContent = 'Could not load citations'; }
+    else if (entry === undefined) { meta.textContent = 'No citation found'; }
+    else {
+      const [idx, count] = entry;
+      const [book, chapter, verse, text] = data.verses[idx];
+      meta.textContent = formatBook(book) + ' ' + chapter + ':' + verse +
+        ' · ' + (count === 1 ? '1×' : count.toLocaleString() + '×');
+      const t = document.createElement('div');
+      t.className = 'info-verse';
+      t.textContent = text;
+      v.appendChild(t);
+      verseInfo = { word, meta: meta.textContent, text };
+      v.classList.add('has-verse');
+      if (t.scrollHeight > t.clientHeight + 1) { // clamped: point at the full view
+        const more = document.createElement('span');
+        more.className = 'more';
+        more.textContent = '⤢ full';
+        meta.appendChild(more);
+      }
+    }
+  });
 }
 
-function showCitation(el, word) {
-  el.textContent = 'Loading citation…';
-  if (CITATIONS) {
-    fillCitationInto(el, word);
-  } else {
-    citationsReady.then(() => fillCitationInto(el, word));
-  }
+function openFull() {
+  if (!verseInfo) return;
+  const f = $('full');
+  f.textContent = '';
+  const w = document.createElement('div');
+  w.className = 'info-word';
+  w.textContent = displayWord(toTiles(verseInfo.word));
+  const m = document.createElement('div');
+  m.className = 'info-meta';
+  m.textContent = verseInfo.meta.replace(/\s*⤢ full$/, '');
+  const t = document.createElement('div');
+  t.className = 'info-verse';
+  t.textContent = verseInfo.text;
+  f.append(w, m, t);
+  f.hidden = false;
+  $('backdrop').hidden = false;
 }
+function closeFull() { $('full').hidden = true; $('backdrop').hidden = true; }
+$('verse').onclick = openFull;
+$('full').onclick = closeFull;
+$('backdrop').onclick = closeFull;
 
 function pressKey(k) {
   if (done) return;
-  if (current.length < 5) {
-    current.push(k);
-    renderCurrent();
-  }
+  loadCitations();
+  if (current.length < 5) { current.push(k); renderCurrent(); }
 }
 
 function backspace() {
@@ -340,88 +399,75 @@ function backspace() {
   renderCurrent();
 }
 
-function addKeyRow(kb, keys, extraClass) {
-  const krow = document.createElement('div');
-  krow.className = 'krow' + (extraClass ? ' ' + extraClass : '');
-  for (const k of keys) {
-    const btn = document.createElement('button');
-    btn.className = 'key';
-    btn.textContent = k;
-    btn.onclick = () => pressKey(k);
-    krow.appendChild(btn);
-  }
-  kb.appendChild(krow);
+function makeKey(label, cls, handler) {
+  const btn = document.createElement('button');
+  btn.className = 'key' + (cls ? ' ' + cls : '');
+  btn.textContent = label;
+  // pointerdown fires immediately, without waiting for the finger to lift.
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); handler(); });
+  return btn;
 }
 
 function buildKeyboard() {
-  const kb = document.getElementById('keyboard');
-  kb.innerHTML = '';
-  for (const row of KEY_ROWS) addKeyRow(kb, row);
-
-  const lastRow = document.createElement('div');
-  lastRow.className = 'krow';
-  const enterBtn = document.createElement('button');
-  enterBtn.className = 'key wide';
-  enterBtn.textContent = 'Enter';
-  enterBtn.onclick = submitGuess;
-  const delBtn = document.createElement('button');
-  delBtn.className = 'key wide';
-  delBtn.textContent = 'Del';
-  delBtn.onclick = backspace;
-  lastRow.appendChild(enterBtn);
-  lastRow.appendChild(delBtn);
-  kb.appendChild(lastRow);
-  updateKeyboardColors();
-}
-
-function updateKeyboardColors() {
-  document.querySelectorAll('.key').forEach(btn => {
-    const k = btn.textContent;
-    if (keyStatus[k]) {
-      btn.classList.remove('correct', 'present', 'absent');
-      btn.classList.add(keyStatus[k]);
+  const kb = $('keyboard');
+  kb.textContent = '';
+  Object.keys(keyButtons).forEach(k => delete keyButtons[k]);
+  KEY_ROWS.forEach((keys, i) => {
+    const krow = document.createElement('div');
+    krow.className = 'krow';
+    if (i === 2) krow.appendChild(makeKey('Enter', 'wide', submitGuess));
+    for (const k of keys) {
+      const btn = makeKey(k, '', () => pressKey(k));
+      keyButtons[k] = btn;
+      krow.appendChild(btn);
     }
+    if (i === 2) krow.appendChild(makeKey('⌫', 'wide', backspace));
+    kb.appendChild(krow);
   });
 }
 
-document.getElementById('reset').onclick = () => {
-  Object.keys(keyStatus).forEach(k => delete keyStatus[k]);
+// Physical keyboard support (desktop).
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeFull();
+  else if (e.key === 'Enter') submitGuess();
+  else if (e.key === 'Backspace') backspace();
+});
+
+$('reset').onclick = () => {
   nonAttestedCount = 0;
-  document.getElementById('nonattested-count').textContent = '0';
+  $('nonattested-count').textContent = '0';
   newGame();
 };
 
-document.getElementById('giveup').onclick = () => {
+$('giveup').onclick = () => {
   if (done) return;
-  showMsg('Word was: ' + targetTiles.map((t, i) => toDisplay(t, i === 4)).join(''));
-  showCitation(document.getElementById('answer-info'), target);
-  done = true;
-  document.getElementById('share').hidden = false;
+  showAnswerMsg('Word was: ');
+  endGame();
 };
+
+$('share').onclick = share;
+$('help-btn').onclick = () => { $('help').hidden = false; };
+$('help').onclick = () => { $('help').hidden = true; };
 
 const RESULT_EMOJI = { correct: '🟩', present: '🟨', absent: '⬛' };
 
+// Tiles run right-to-left on the board, but pasted text is left-to-right, so
+// the emoji are reversed to match. The count goes last so the (varying-width)
+// digits can't push the emoji out of alignment.
 function buildShareText() {
   const rows = guessLog.map(g => {
     const entry = CITATIONS && CITATIONS.words[g.word];
     const count = entry ? entry[1].toLocaleString() : '?';
-    const emojis = g.result.map(r => RESULT_EMOJI[r]).join('');
-    return count.padStart(5, ' ') + '  ' + emojis;
+    return g.result.map(r => RESULT_EMOJI[r]).reverse().join('') + '  ' + count;
   });
-  return [
-    'Tanakh Wordle ' + (won ? guessLog.length : 'X') + '/6',
-    '',
-    ...rows,
-    '',
-    '🟥 ' + nonAttestedCount,
-  ].join('\n');
+  return ['Tordle ' + (won ? guessLog.length : 'X') + '/6', '', ...rows, '', '🟥 ' + nonAttestedCount, '', 'https://aerfrei.github.io/heb-lang/'].join('\n');
 }
 
-document.getElementById('share').onclick = () => {
-  navigator.clipboard.writeText(buildShareText())
+function share() {
+  loadCitations().then(() => navigator.clipboard.writeText(buildShareText()))
     .then(() => showMsg('Copied results to clipboard!'))
     .catch(() => showMsg('Could not copy to clipboard'));
-};
+}
 
 newGame();
 </script>
